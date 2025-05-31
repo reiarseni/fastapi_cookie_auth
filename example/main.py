@@ -1,4 +1,8 @@
-"""Example FastAPI application using fastapi_cookie_auth."""
+"""Example FastAPI application using fastapi_cookie_auth.
+
+This example demonstrates how to implement cookie-based authentication
+with role-based access control in a FastAPI application.
+"""
 
 import os
 from typing import Dict, Optional
@@ -10,19 +14,19 @@ from fastapi.staticfiles import StaticFiles
 from functools import wraps
 from pathlib import Path
 
-# Importar constantes y decoradores de autenticación
+# Import authentication constants and decorators
 from auth import ROLE_SUPER_ADMIN, ROLE_ADMIN, ROLE_USER, ROLE_GUEST
 
 # Import fastapi_cookie_auth - for local development
 import sys
 import os
 
-# Asegurarnos que el directorio padre está en el path para poder importar el paquete
+# Ensure parent directory is in path to import the package
 parent_dir = str(Path(__file__).parent.parent.absolute())
 if parent_dir not in sys.path:
     sys.path.insert(0, parent_dir)
 
-# Ahora podemos importar el paquete
+# Now we can import the package
 from fastapi_cookie_auth import LoginManager, UserMixin, login_user, logout_user, login_required, roles_required
 
 # Load environment variables
@@ -35,29 +39,29 @@ app = FastAPI(title="FastAPI Cookie Auth Example")
 templates = Jinja2Templates(directory=Path(__file__).parent / "templates")
 app.mount("/static", StaticFiles(directory=Path(__file__).parent / "static"), name="static")
 
-# Configurar uvicorn para mostrar más información de depuración
+# Configure uvicorn to show more debug information
 import logging
 logging.basicConfig(level=logging.DEBUG)
 
 # Initialize login manager with proper configuration
 login_manager = LoginManager(app, mode="dev")
 
-# Configure secret key for encryption - use a strong key
+# Configure secret key for encryption - use a strong key in production
 login_manager.cookie_settings.secret_key = "this-is-a-super-secret-key-for-development-only"
 
-# Make cookie visible in browser dev tools
+# Make cookie visible in browser dev tools (only for development)
 login_manager.cookie_settings.cookie_httponly = False
 
-# Set cookie name explicitly
+# Set cookie name explicitly for clarity
 login_manager.cookie_settings.cookie_name = "fastapi_auth"
 
-# Adjust SameSite setting to be more compatible
+# Adjust SameSite setting for better compatibility
 login_manager.cookie_settings.cookie_samesite = None  # Set to None for better compatibility
 
 # Ensure domain is correctly set for local development
 login_manager.cookie_settings.cookie_domain = None
 
-# Use file storage for sessions with expiration and cleanup
+# Use memory storage for sessions with expiration and cleanup
 login_manager.store_session_in_memory = True
 
 # Configure session expiration - 30 minutes for demo purposes
@@ -66,28 +70,39 @@ SESSION_EXPIRY["enabled"] = True
 SESSION_EXPIRY["lifetime"] = 1800  # 30 minutes
 SESSION_EXPIRY["cleanup_interval"] = 300  # 5 minutes
 
-# Configure token revocation
+# Configure token revocation system
 from fastapi_cookie_auth.utils.config import REVOCATION_CONFIG
 from fastapi_cookie_auth.utils.revocation import configure as configure_revocation
 REVOCATION_CONFIG["enabled"] = True
 REVOCATION_CONFIG["max_revoked"] = 100
 REVOCATION_CONFIG["cleanup_interval"] = 300  # 5 minutes
 
-# Initialize the token revocation system
+# Initialize the token revocation system with configured parameters
 configure_revocation(
     max_revoked=REVOCATION_CONFIG["max_revoked"],
     cleanup_interval=REVOCATION_CONFIG["cleanup_interval"]
 )
 
-# Print configuration for debugging
+# Print configuration for debugging purposes
 print(f"Cookie settings: {login_manager.cookie_settings.__dict__}")
 print(f"Session expiry: {SESSION_EXPIRY}")
 print(f"Token revocation: {REVOCATION_CONFIG}")
 print(f"Using memory storage: {login_manager.store_session_in_memory}")
 print(f"Storage type: {type(login_manager._storage).__name__}")
 
-# User model similar to the one in the tests
+# User model implementing UserMixin for authentication
 class User(UserMixin):
+    """User model implementing UserMixin for authentication.
+    
+    This class provides user authentication functionality with role-based
+    access control support.
+    
+    Args:
+        id: Unique identifier for the user
+        username: Username for display and login
+        password: User's password (in production, use password hashing)
+        role: User's role for access control
+    """
     def __init__(self, id: str, username: str, password: str, role: str = ROLE_USER):
         self.id = id
         self.username = username
@@ -95,14 +110,25 @@ class User(UserMixin):
         self.role = role  # Property to determine the user's role
     
     def is_admin(self) -> bool:
-        """Check if user has admin role."""
+        """Check if user has administrator role.
+        
+        Returns:
+            True if user has admin or super_admin role, False otherwise
+        """
         return self.role in (ROLE_ADMIN, ROLE_SUPER_ADMIN)
     
     def has_role(self, *roles) -> bool:
-        """Check if user has any of the specified roles."""
+        """Check if user has any of the specified roles.
+        
+        Args:
+            *roles: Variable number of role names to check
+            
+        Returns:
+            True if user has any of the specified roles, False otherwise
+        """
         return self.role in roles
 
-# Simple in-memory user database
+# Simple in-memory user database for demonstration
 users_db: Dict[str, User] = {
     "1": User(id="1", username="superadmin", password="superadmin123", role=ROLE_SUPER_ADMIN),
     "2": User(id="2", username="admin", password="admin123", role=ROLE_ADMIN),
@@ -112,28 +138,59 @@ users_db: Dict[str, User] = {
 
 @login_manager.user_loader
 async def load_user(user_id: str) -> Optional[User]:
-    """Load user by ID."""
+    """Load user by ID from the database.
+    
+    This callback is used by the login manager to retrieve a user
+    by their ID during authentication.
+    
+    Args:
+        user_id: The unique identifier of the user to load
+        
+    Returns:
+        User object if found, None otherwise
+    """
     return users_db.get(user_id)
 
 @app.get("/")
 async def root(request: Request):
-    """Home page route."""
-    user = request.state.user
+    """Render the home page with user information if authenticated.
     
-    # Customize greeting based on authentication status
-    if user and user.is_authenticated:
-        greeting = f"Hello {user.username}!"
-    else:
-        greeting = "Hello anonymous user!"
+    This route displays the main page of the application, showing different
+    content based on authentication status.
     
+    Args:
+        request: The FastAPI request object
+        
+    Returns:
+        TemplateResponse with the rendered index template
+    """
+    user = request.state.user if hasattr(request.state, "user") else None
+    
+    # Check if user is authenticated
+    is_authenticated = user is not None and hasattr(user, "is_authenticated") and user.is_authenticated
+    
+    # Render the template with user info if available
     return templates.TemplateResponse(
         "index.html",
-        {"request": request, "user": user, "greeting": greeting}
+        {
+            "request": request,
+            "user": user,
+            "is_authenticated": is_authenticated
+        }
     )
 
 @app.get("/login")
 async def login_page(request: Request):
-    """Login page route."""
+    """Render the login page.
+    
+    This route displays the login form for user authentication.
+    
+    Args:
+        request: The FastAPI request object
+        
+    Returns:
+        TemplateResponse with the rendered login template
+    """
     return templates.TemplateResponse("login.html", {"request": request})
 
 @app.post("/login")
@@ -254,7 +311,7 @@ async def admin_users(request: Request):
     """
     user = request.state.user
     
-    # En una aplicación real, aquí obtendrías la lista de usuarios de la base de datos
+    # In a real application, you would retrieve the user list from the database
     users_list = [{
         "id": u.id,
         "username": u.username,
@@ -286,10 +343,20 @@ async def superadmin_page(request: Request):
 @login_required
 @roles_required(ROLE_ADMIN, ROLE_SUPER_ADMIN)
 async def manage_sessions(request: Request):
-    """Page to manage active sessions and demonstrate session features."""
+    """Render the session management page.
+    
+    This page allows administrators to view and manage active user sessions,
+    demonstrating the session storage and revocation features.
+    
+    Args:
+        request: The FastAPI request object
+        
+    Returns:
+        TemplateResponse with the rendered sessions template and session data
+    """
     user = request.state.user
     
-    # Check if our storage supports listing sessions
+    # Check if our storage backend supports listing active sessions
     active_sessions = []
     has_storage_listing = hasattr(login_manager._storage, "get_all_sessions")
     
@@ -305,11 +372,11 @@ async def manage_sessions(request: Request):
                 if not session:
                     continue
                     
-                # Add token to the session data
+                # Add token to the session data (truncated for security)
                 session["token"] = token[:8] + "..." # Show only first 8 chars
                 session["raw_token"] = token
                 
-                # Convert timestamps to readable format
+                # Convert Unix timestamps to human-readable format
                 if "created_at" in session:
                     import datetime
                     created = datetime.datetime.fromtimestamp(session["created_at"])
@@ -340,7 +407,18 @@ async def manage_sessions(request: Request):
 @login_required
 @roles_required(ROLE_ADMIN, ROLE_SUPER_ADMIN)
 async def revoke_session(request: Request, token: str = Form(...)):
-    """Revoke a specific session token."""
+    """Revoke a specific session token.
+    
+    This endpoint allows administrators to invalidate a user session,
+    forcing the user to log in again.
+    
+    Args:
+        request: The FastAPI request object
+        token: The session token to revoke
+        
+    Returns:
+        JSON response indicating success or failure
+    """
     from fastapi_cookie_auth.utils.revocation import revoke_token
     
     if REVOCATION_CONFIG["enabled"]:
@@ -352,4 +430,4 @@ async def revoke_session(request: Request, token: str = Form(...)):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="0.0.0.0", port=8001)

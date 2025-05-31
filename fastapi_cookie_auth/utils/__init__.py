@@ -191,7 +191,7 @@ def login_user(
         if httponly:
             cookie_header += "; HttpOnly"
         
-        # Add samesite attribute - manejando None explícitamente
+        # Add samesite attribute - handling None explicitly
         if samesite is not None:
             cookie_header += f"; SameSite={samesite}"
         

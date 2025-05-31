@@ -1,5 +1,8 @@
 """
 UserMixin implementation for FastAPI Cookie Auth.
+
+This module provides a base class that implements common user authentication
+methods required for cookie-based authentication in FastAPI applications.
 """
 
 from typing import Any, Dict, Optional
@@ -7,36 +10,59 @@ from typing import Any, Dict, Optional
 
 class UserMixin:
     """
-    This provides default implementations for methods that Flask-Login
-    expects user objects to have.
+    Base class that provides default implementations for authentication methods.
+    
+    This class is inspired by Flask-Login's UserMixin and provides similar
+    functionality for FastAPI applications. User models should inherit from
+    this class to gain standard authentication behavior.
+    
+    Example:
+        ```python
+        class User(UserMixin):
+            def __init__(self, id, username):
+                self.id = id
+                self.username = username
+        ```
     """
     
     @property
     def is_active(self) -> bool:
         """
-        Returns True if this is an active user.
+        Check if this is an active user account.
         
-        This should return True for users unless they are inactive, for example
-        because they have been banned or their account is inactive.
+        This property should return True for users unless they are inactive,
+        for example because they have been banned or their account has been
+        deactivated.
+        
+        Returns:
+            True if the user is active, False otherwise
         """
         return True
     
     @property
     def is_authenticated(self) -> bool:
         """
-        Returns True if the user is authenticated.
+        Check if the user is authenticated.
         
-        This method is required by Flask-Login, and is typically used to
-        determine whether a user is logged in or not.
+        This property is used to determine whether a user is logged in.
+        By default, all UserMixin instances are considered authenticated.
+        Override this property if you need custom authentication logic.
+        
+        Returns:
+            True if the user is authenticated, False otherwise
         """
         return True
     
     @property
     def is_anonymous(self) -> bool:
         """
-        Returns False as default users are not anonymous.
+        Check if the user is anonymous.
         
-        Anonymous users are not typical in most applications.
+        This property indicates whether a user is anonymous (not authenticated).
+        By default, all UserMixin instances are considered non-anonymous.
+        
+        Returns:
+            False for authenticated users, True for anonymous users
         """
         return False
     
@@ -44,8 +70,16 @@ class UserMixin:
         """
         Return the user ID as a string.
         
-        This is required by Flask-Login and is used to restore the user from
-        the session cookie.
+        This method is used to identify the user in the session. It should
+        return a unique identifier that can be used to retrieve the user
+        from storage.
+        
+        Returns:
+            A string representation of the user's unique identifier
+            
+        Raises:
+            NotImplementedError: If the user object doesn't have an 'id' attribute
+                and this method hasn't been overridden
         """
         try:
             return str(self.id)

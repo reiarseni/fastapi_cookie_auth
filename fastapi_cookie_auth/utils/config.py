@@ -10,40 +10,40 @@ import secrets
 from typing import Any, Dict, Literal, Optional, Union
 
 
-# Modo de seguridad de cookies
-COOKIE_SECURITY_TOKEN = "token"     # Token de sesión aleatorio (UUID)
+# Cookie security mode
+COOKIE_SECURITY_TOKEN = "token"     # Random session token (UUID)
 
 # Predefined configuration modes
-# Configuración de cookies
+# Cookie configuration
 DEV_COOKIE_CONFIG = {
-    "cookie_domain": None,  # None para usar el dominio actual (localhost)
-    "cookie_secure": False,  # False para desarrollo sin HTTPS
-    "cookie_httponly": False,  # False para permitir acceso desde JavaScript y ver en DevTools
-    "cookie_samesite": "lax",  # Lax es más permisivo que Strict
-    "remember_cookie_duration": 30 * 24 * 60 * 60,  # 30 días
-    "cookie_security_mode": COOKIE_SECURITY_TOKEN,  # Siempre usar modo token aleatorio
-    "secret_key": "dev-secret-key-not-for-production"  # Clave para las operaciones criptográficas
+    "cookie_domain": None,  # None to use current domain (localhost)
+    "cookie_secure": False,  # False for development without HTTPS
+    "cookie_httponly": False,  # False to allow JavaScript access and DevTools visibility
+    "cookie_samesite": "lax",  # Lax is more permissive than Strict
+    "remember_cookie_duration": 30 * 24 * 60 * 60,  # 30 days
+    "cookie_security_mode": COOKIE_SECURITY_TOKEN,  # Always use random token mode
+    "secret_key": "dev-secret-key-not-for-production"  # Key for cryptographic operations
 }
 
 PROD_COOKIE_CONFIG = {
-    "cookie_domain": None,  # Usará el dominio actual
-    "cookie_secure": True,  # True para producción (requiere HTTPS)
-    "cookie_httponly": True,  # True para seguridad
-    "cookie_samesite": "strict",  # Strict para mejor seguridad
-    "remember_cookie_duration": 7 * 24 * 60 * 60,  # 7 días (más corto por seguridad)
-    "cookie_security_mode": COOKIE_SECURITY_TOKEN,  # Siempre usar modo token aleatorio
-    "secret_key": ""  # Debe configurarse en producción con una clave segura
+    "cookie_domain": None,  # Will use the current domain
+    "cookie_secure": True,  # True for production (requires HTTPS)
+    "cookie_httponly": True,  # True for security
+    "cookie_samesite": "strict",  # Strict for better security
+    "remember_cookie_duration": 7 * 24 * 60 * 60,  # 7 days (shorter for security)
+    "cookie_security_mode": COOKIE_SECURITY_TOKEN,  # Always use random token mode
+    "secret_key": ""  # Must be configured in production with a secure key
 }
 
-# Configuración general del LoginManager
+# General LoginManager configuration
 DEV_CONFIG = {
-    "login_view": "/login",  # Vista de login predeterminada
-    "session_protection": "basic"  # Protección de sesión básica
+    "login_view": "/login",  # Default login view
+    "session_protection": "basic"  # Basic session protection
 }
 
 PROD_CONFIG = {
-    "login_view": "/login",  # Vista de login predeterminada
-    "session_protection": "basic"  # Protección de sesión básica
+    "login_view": "/login",  # Default login view
+    "session_protection": "basic"  # Basic session protection
 }
 
 # Storage configuration
@@ -82,7 +82,6 @@ class CookieSettings:
     - "custom": Custom settings provided by the user
     
     Supports four security modes for cookies:
-    - "plain": User ID stored directly in the cookie (least secure)
     - "signed": User ID signed with HMAC to prevent tampering
     - "encrypted": User ID encrypted for confidentiality
     - "token": Random session token stored instead of User ID
@@ -109,12 +108,12 @@ class CookieSettings:
         # Duration for session cookies (None = browser session)
         self.session_cookie_duration: Optional[int] = None
         
-        # Nuevas configuraciones de seguridad
-        # Modo de seguridad para cookies (token)
+        # New security configurations
+        # Security mode for cookies (token)
         self.cookie_security_mode: str = COOKIE_SECURITY_TOKEN
-        # Clave secreta para operaciones criptográficas
+        # Secret key for cryptographic operations
         self.secret_key: str = ""
-        # Ya no es necesario usar este flag porque siempre usamos tokens
+        # No longer necessary to use this flag because we always use tokens
         self.use_session_token: bool = True
         
     def update(self, **kwargs: Any) -> None:

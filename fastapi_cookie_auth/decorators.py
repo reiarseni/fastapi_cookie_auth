@@ -36,7 +36,17 @@ def roles_required(*roles):
             user = request.state.user
             
             # Check if the user has any of the required roles
-            if not hasattr(user, 'role') or user.role not in roles:
+            # First check for get_roles method (preferred)
+            if hasattr(user, 'get_roles') and callable(getattr(user, 'get_roles')):
+                user_roles = user.get_roles()
+                if not any(role in user_roles for role in roles):
+                    # Return a 403 Forbidden error
+                    return JSONResponse(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        content={"status": "forbidden", "message": "Access denied: Appropriate role required"}
+                    )
+            # Fallback to checking role attribute directly
+            elif not hasattr(user, 'role') or user.role not in roles:
                 # Return a 403 Forbidden error
                 return JSONResponse(
                     status_code=status.HTTP_403_FORBIDDEN,

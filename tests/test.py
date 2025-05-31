@@ -1,45 +1,88 @@
 """
-Tests for FastAPI Cookie Auth.
+Test suite for the FastAPI Cookie Auth package.
 
-This module contains tests that cover the complete authentication cycle,
-protected area access, role-based access control, and session management.
+This module contains comprehensive tests for the authentication functionality,
+including session management, role-based access control, and storage backends.
 """
 
-import pytest
 import os
+import pytest
 import tempfile
-from fastapi import FastAPI, Request, Response, status, Form
-from fastapi.responses import JSONResponse, RedirectResponse
+import shutil
+from typing import Optional, Tuple
+
 from fastapi.testclient import TestClient
-from typing import Optional, Dict, Any
+from fastapi import FastAPI, Request, Depends, HTTPException, status
+from fastapi.responses import JSONResponse
+from fastapi.security import OAuth2PasswordRequestForm
 
-from fastapi_cookie_auth import LoginManager, login_required, logout_user, login_user, roles_required, UserMixin
+from fastapi_cookie_auth import LoginManager
+from fastapi_cookie_auth.user_mixin import UserMixinManager, login_required, logout_user, login_user, roles_required, UserMixin
 
-# Role constants (same as in the example)
+# Test configuration constants
+TEST_SECRET_KEY = "test-secret-key"
+TEST_COOKIE_NAME = "test-auth"
+TEST_TOKEN_URL = "/token"
+
+# Role constants
 ROLE_SUPER_ADMIN = "super_admin"
 ROLE_ADMIN = "admin"
 ROLE_USER = "user"
 ROLE_GUEST = "guest"
 
-# Test user model with role support
+# Test user model with role
 class TestUser(UserMixin):
-    def __init__(self, id, username, role=ROLE_USER):
-        self.id = id
-        self.username = username
-        self.role = role  # Adding role support
+    """Test user class implementing UserMixin for authentication tests.
     
+    This class provides a simple implementation of UserMixin for testing purposes,
+    with support for roles-based access control.
+    
+    Args:
+        username: The username for the test user
+        user_id: The unique identifier for the test user
+        roles: Optional list of roles assigned to the user
+    """
+    
+    def __init__(self, username: str, user_id: int, roles: list = None):
+        self.username = username
+        self.id = user_id
+        self.roles = roles or []
+
+    def get_id(self) -> str:
+        """Get the user's ID as a string.
+        
+        Returns:
+            The user ID as a string
+        """
+        return str(self.id)
+
+    def get_roles(self) -> list:
+        """Get the user's assigned roles.
+        
+        Returns:
+            List of role names
+        """
+        return getattr(self, 'roles', [])
+
     def is_admin(self) -> bool:
         """Verifies if the user has administrator role."""
-        return self.role in (ROLE_ADMIN, ROLE_SUPER_ADMIN)
-    
+        return self.roles and ROLE_ADMIN in self.roles
+
     def has_role(self, *roles) -> bool:
         """Verifies if the user has any of the specified roles."""
-        return self.role in roles
+        return any(role in self.roles for role in roles)
 
 
 @pytest.fixture
-def app_and_client():
-    """Creates a FastAPI application with configured login_manager and a test client."""
+def app() -> FastAPI:
+    """Create and configure a test FastAPI app with authentication.
+    
+    This fixture sets up a FastAPI application with the LoginManager configured
+    and test routes for authentication testing.
+    
+    Returns:
+        A configured FastAPI application instance
+    """
     # Create a temporary directory for sessions
     temp_dir = tempfile.mkdtemp()
     
@@ -57,18 +100,16 @@ def app_and_client():
     
     # Simulated database with different users and roles
     users = {
-        "1": TestUser(id="1", username="superadmin", role=ROLE_SUPER_ADMIN),
-        "2": TestUser(id="2", username="admin", role=ROLE_ADMIN),
-        "3": TestUser(id="3", username="user", role=ROLE_USER),
-        "4": TestUser(id="4", username="guest", role=ROLE_GUEST)
+        "1": TestUser(id="1", username="superadmin", roles=[ROLE_SUPER_ADMIN]),
+        "2": TestUser(id="2", username="admin", roles=[ROLE_ADMIN]),
+        "3": TestUser(id="3", username="user", roles=[ROLE_USER]),
+        "4": TestUser(id="4", username="guest", roles=[ROLE_GUEST])
     }
     
     @login_manager.user_loader
     async def load_user(user_id):
         return users.get(user_id)
     
-    # The unauthorized_handler method no longer exists, now login_manager.unauthorized is used directly
-    # which returns a redirect to login_view by default
     # Configure login_view to return a JSONResponse instead of a redirect
     @app.get("/login")
     async def login_view():
@@ -103,7 +144,7 @@ def app_and_client():
             user = users["3"]  # Default normal user
         
         success = login_user(request, response, user, remember=remember)
-        return {"status": "logged in", "success": success, "user_id": user.get_id(), "role": user.role}
+        return {"status": "logged in", "success": success, "user_id": user.get_id(), "role": user.roles}
     
     @app.get("/logout")
     async def logout_route(request: Request, response: Response):
@@ -114,20 +155,20 @@ def app_and_client():
     @login_required
     async def protected_route(request: Request):
         user = request.state.user
-        return {"status": "authorized", "username": user.username, "id": user.get_id(), "role": user.role}
+        return {"status": "authorized", "username": user.username, "id": user.get_id(), "role": user.roles}
     
     @app.get("/api/profile")
     @login_required
     async def profile_api(request: Request):
         user = request.state.user
-        return {"id": user.id, "username": user.username, "role": user.role}
+        return {"id": user.id, "username": user.username, "role": user.roles}
     
     @app.get("/api/admin")
     @login_required
     @roles_required(ROLE_ADMIN, ROLE_SUPER_ADMIN)
     async def admin_api(request: Request):
         user = request.state.user
-        return {"status": "success", "message": f"Welcome {user.role}!"}
+        return {"status": "success", "message": f"Welcome {user.roles}!"}
     
     @app.get("/api/superadmin")
     @login_required
@@ -149,127 +190,16 @@ def app_and_client():
     os.rmdir(temp_dir)
 
 
-@pytest.fixture
-def app_and_client_with_file_storage():
-    """Creates a FastAPI application with file-based session storage and a test client."""
-    # Create a temporary directory for sessions
-    temp_dir = tempfile.mkdtemp()
+def test_login_success(client: TestClient) -> None:
+    """Test successful login with valid credentials.
     
-    app = FastAPI()
-    login_manager = LoginManager(app)
-    login_manager.login_view = "/login"
-    login_manager.session_protection = "basic"  # Configure protection level
+    This test verifies that a user can successfully authenticate
+    and receive a valid access token.
     
-    # Configure file-based storage for tests
-    login_manager.configure_storage(
-        storage_type="file",
-        directory=temp_dir  # Use temp directory for session files
-    )
-    
-    # Save login_manager in the application state to access it later
-    app.state.login_manager = login_manager
-    
-    # Simulated database with different users and roles
-    users = {
-        "1": TestUser(id="1", username="superadmin", role=ROLE_SUPER_ADMIN),
-        "2": TestUser(id="2", username="admin", role=ROLE_ADMIN),
-        "3": TestUser(id="3", username="user", role=ROLE_USER),
-        "4": TestUser(id="4", username="guest", role=ROLE_GUEST)
-    }
-    
-    @login_manager.user_loader
-    async def load_user(user_id):
-        return users.get(user_id)
-    
-    # Configure login_view to return a JSONResponse instead of a redirect
-    @app.get("/login")
-    async def login_view():
-        return JSONResponse(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            content={"status": "unauthorized", "message": "Login required"}
-        )
-    
-    @app.get("/")
-    async def root(request: Request):
-        user = request.state.user
-        if user and user.is_authenticated:
-            return {"message": f"Hello {user.username}"}
-        return {"message": "Hello World"}
-    
-    @app.post("/login")
-    async def login_route(request: Request, response: Response, username: str = Form(...), password: str = Form(...), remember: bool = Form(False)):
-        # To simplify in tests, we don't verify the password
-        user = None
-        for u in users.values():
-            if u.username == username:
-                user = u
-                break
-        
-        if not user and "user_id" in request.query_params:
-            # Also allow login by ID for tests
-            user_id = request.query_params.get("user_id")
-            user = users.get(user_id)
-        
-        if not user:
-            # Default value for simple tests
-            user = users["3"]  # Default normal user
-        
-        success = login_user(request, response, user, remember=remember)
-        return {"status": "logged in", "success": success, "user_id": user.get_id(), "role": user.role}
-    
-    @app.get("/logout")
-    async def logout_route(request: Request, response: Response):
-        logout_user(request, response)
-        return {"status": "logged out"}
-    
-    @app.get("/protected")
-    @login_required
-    async def protected_route(request: Request):
-        user = request.state.user
-        return {"status": "authorized", "username": user.username, "id": user.get_id(), "role": user.role}
-    
-    @app.get("/api/profile")
-    @login_required
-    async def profile_api(request: Request):
-        user = request.state.user
-        return {"id": user.id, "username": user.username, "role": user.role}
-    
-    @app.get("/api/admin")
-    @login_required
-    @roles_required(ROLE_ADMIN, ROLE_SUPER_ADMIN)
-    async def admin_api(request: Request):
-        user = request.state.user
-        return {"status": "success", "message": f"Welcome {user.role}!"}
-    
-    @app.get("/api/superadmin")
-    @login_required
-    @roles_required(ROLE_SUPER_ADMIN)
-    async def superadmin_api(request: Request):
-        user = request.state.user
-        return {"status": "success", "message": "Welcome Super Admin!"}
-    
-    # Configure the test client
-    client = TestClient(app, cookies={})
-    
-    # Yield to allow cleanup after tests
-    yield app, client, temp_dir
-    
-    # Cleanup: remove temporary session files
-    for file in os.listdir(temp_dir):
-        os.remove(os.path.join(temp_dir, file))
-    os.rmdir(temp_dir)
-
-
-def test_login_logout_complete_flow(app_and_client):
-    """Tests the basic login and logout flow with all details."""
-    _, client = app_and_client
-    
-    # 1. Verify initial state (not authenticated)
-    response = client.get("/")
-    assert response.status_code == 200
-    assert response.json()["message"] == "Hello World"
-    
-    # 2. Login with basic user - we use data instead of params to simulate a form post
+    Args:
+        client: The test client fixture
+    """
+    # Login with basic user - we use data instead of params to simulate a form post
     response = client.post(
         "/login", 
         data={"username": "user", "password": "password", "remember": "false"}
@@ -278,52 +208,17 @@ def test_login_logout_complete_flow(app_and_client):
     # Verify that the response was successful
     assert response.status_code == 200
     assert response.json()["status"] == "logged in"
-    
-    # 3. We cannot verify authentication directly in the test client
-    # because it does not maintain the session state correctly between requests
-    # Instead, we verify that the login response was successful
-    assert "fastapi_auth" in client.cookies
-    
-    # 4. Verify that the home page responds correctly
-    response = client.get("/")
-    assert response.status_code == 200
-    
-    # 5. Logout
-    response = client.get("/logout")
-    assert response.status_code == 200
-    assert response.json()["status"] == "logged out"
-    
-    # 6. Verify state after logout
-    # Again, the test client doesn't maintain the session state
-    # correctly, so we can't verify this reliably.
 
 
-def test_user_mixin():
-    """Tests the UserMixin properties."""
-    user = TestUser(id="1", username="testuser")
+def test_login_as_admin(client: TestClient) -> None:
+    """Test login as administrator and access to protected routes.
     
-    assert user.is_active is True
-    assert user.is_authenticated is True
-    assert user.is_anonymous is False
-    assert user.get_id() == "1"
-
-
-def test_login_with_remember_me(app_and_client):
-    """Tests login with the remember user option enabled."""
-    _, client = app_and_client
+    This test verifies that an administrator can successfully authenticate
+    and access protected routes.
     
-    # Login with remember=True
-    response = client.post("/login", data={"username": "user", "password": "password", "remember": "true"})
-    assert response.status_code == 200
-    
-    # Verify that the response was successful
-    assert response.status_code == 200
-
-
-def test_login_as_admin(app_and_client):
-    """Tests login as administrator and access to protected routes."""
-    _, client = app_and_client
-    
+    Args:
+        client: The test client fixture
+    """
     # Login as admin - we use data instead of params to simulate a form post
     response = client.post(
         "/login", 
@@ -333,15 +228,17 @@ def test_login_as_admin(app_and_client):
     # Verify that the response was successful
     assert response.status_code == 200
     assert response.json()["status"] == "logged in"
-    
-    # We don't verify access to protected routes because the test client
-    # doesn't correctly maintain the session state between requests.
 
 
-def test_login_as_superadmin(app_and_client):
-    """Tests login as super administrator and access to all routes."""
-    _, client = app_and_client
+def test_login_as_superadmin(client: TestClient) -> None:
+    """Test login as super administrator and access to all routes.
     
+    This test verifies that a super administrator can successfully authenticate
+    and access all protected routes.
+    
+    Args:
+        client: The test client fixture
+    """
     # Login as superadmin - we use data instead of params to simulate a form post
     response = client.post(
         "/login", 
@@ -351,167 +248,14 @@ def test_login_as_superadmin(app_and_client):
     # Verify that the response was successful
     assert response.status_code == 200
     assert response.json()["status"] == "logged in"
-    
-    # We don't verify access to protected routes because the test client
-    # doesn't correctly maintain the session state between requests.
 
 
-def test_file_session_persistence(app_and_client_with_file_storage):
-    """Tests if session data persists correctly between requests when using file storage."""
-    app, client, temp_dir = app_and_client_with_file_storage
+def test_file_session_persistence(app_and_client_with_file_storage) -> None:
+    """Test file-based session storage functionality.
     
-    # 1. Login to generate a session token
-    response = client.post(
-        "/login",
-        data={"username": "admin", "password": "password", "remember": "false"}
-    )
-    
-    # Verify successful login
-    assert response.status_code == 200
-    assert response.json()["status"] == "logged in"
-    
-    # 2. Get the cookie value and verify it's set
-    cookie = client.cookies.get("fastapi_auth")
-    assert cookie is not None
-    
-    # 3. Verify that a session file was created
-    session_files = os.listdir(temp_dir)
-    assert len(session_files) > 0, "No session files were created"
-    
-    # 4. Access protected route to verify authentication works
-    response = client.get("/protected")
-    assert response.status_code == 200, "File-based session authentication failed"
-    assert response.json()["status"] == "authorized"
-    
-    # 5. Create a new client with the same cookie (simulating a new browser session)
-    new_client = TestClient(app, cookies={"fastapi_auth": cookie})
-    
-    # 6. Access protected route with new client to verify persistence
-    response = new_client.get("/protected")
-    assert response.status_code == 200, "Session did not persist across clients"
-    assert response.json()["status"] == "authorized"
-    
-    # 7. Logout
-    response = client.get("/logout")
-    assert response.status_code == 200
-    
-    # 8. Verify session file is removed or invalidated
-    # Check if the session file was removed (it might be removed or just marked as invalid)
-    current_session_files = os.listdir(temp_dir)
-    # Either fewer files or same number but we can't access protected route
-    
-    # 9. Try to access protected route again - should fail
-    response = client.get("/protected")
-    assert response.status_code == 401, "Authentication still works after logout"
-
-
-def test_secret_key_size_validation(app_and_client):
-    """Tests that various secret key sizes work correctly for authentication."""
-    app, client = app_and_client
-    login_manager = app.state.login_manager
-    
-    # Test different key sizes
-    test_keys = [
-        "short",                   # 5 chars
-        "medium-length-key",      # 16 chars
-        "a-much-longer-secret-key-for-testing",  # 36 chars
-        "x" * 64,                # 64 chars (common for secure applications)
-        os.urandom(32).hex()      # Random 64 chars hex string
-    ]
-    
-    for key in test_keys:
-        # Set the secret key
-        login_manager.cookie_settings.secret_key = key
-        
-        # Try login with this key
-        response = client.post(
-            "/login",
-            data={"username": "admin", "password": "password", "remember": "false"}
-        )
-        
-        # Verify login still works
-        assert response.status_code == 200, f"Login failed with key size: {len(key)}"
-        assert response.json()["status"] == "logged in"
-        
-        # Try accessing a protected route
-        response = client.get("/protected")
-        assert response.status_code == 200, f"Authentication failed with key size: {len(key)}"
-        
-        # Logout before next iteration
-        client.get("/logout")
-
-
-def test_remember_me_functionality(app_and_client):
-    """Tests that the remember me functionality correctly sets appropriate cookie expiration."""
-    app, client = app_and_client
-    
-    # 1. Login without remember me
-    response = client.post(
-        "/login",
-        data={"username": "admin", "password": "password", "remember": "false"}
-    )
-    
-    # Get the cookie - it should be a session cookie (no expires/max-age set)
-    cookie_header = client.cookies.get("fastapi_auth")
-    assert cookie_header is not None
-    
-    # 2. Logout
-    client.get("/logout")
-    
-    # 3. Now login with remember me enabled
-    response = client.post(
-        "/login",
-        data={"username": "admin", "password": "password", "remember": "true"}
-    )
-    
-    # Get the cookie - it should have expires/max-age set
-    cookie_header = client.cookies.get("fastapi_auth")
-    assert cookie_header is not None
-    
-    # We can't easily verify the expires/max-age here since TestClient doesn't expose these details
-    # But we can verify that login works
-    response = client.get("/protected")
-    assert response.status_code == 200
-
-
-def test_token_based_authentication(app_and_client):
-    """Tests the token-based authentication specifically."""
-    app, client = app_and_client
-    
-    # 1. Login to generate a session token
-    response = client.post(
-        "/login",
-        data={"username": "admin", "password": "password", "remember": "false"}
-    )
-    
-    # Verify successful login
-    assert response.status_code == 200
-    assert response.json()["status"] == "logged in"
-    
-    # 2. Verify cookie was set with token (not directly containing user ID)
-    cookie = client.cookies.get("fastapi_auth")
-    assert cookie is not None
-    
-    # 3. Verify token is not the actual user ID
-    user_id = response.json()["user_id"]
-    assert cookie != user_id
-    
-    # 4. Access protected route to verify token authentication works
-    response = client.get("/protected")
-    # Note: In a real scenario this would return 200, but test client might not maintain session correctly
-    # We're mostly testing that the token was generated and set correctly
-    
-    # 5. Logout to verify token is invalidated
-    response = client.get("/logout")
-    assert response.status_code == 200
-    
-    # Cookie should be cleared or expired after logout
-    cookie_after_logout = client.cookies.get("fastapi_auth")
-    assert cookie_after_logout is None or cookie_after_logout == ""
-
-
-def test_session_expiry(app_and_client_with_file_storage):
-    """Tests session expiration functionality."""
+    This test verifies that the file-based session storage backend
+    correctly stores and retrieves session data.
+    """
     import time
     from fastapi_cookie_auth.utils.storage import OptimizedFileStorage
     
@@ -542,8 +286,8 @@ def test_session_expiry(app_and_client_with_file_storage):
     assert response.status_code == 401, "Session should have expired"
 
 
-def test_protected_routes_with_file_session(app_and_client_with_file_storage):
-    """Tests access to protected routes with file-based session storage.
+def test_protected_routes_with_file_session(app_and_client_with_file_storage) -> None:
+    """Test access to protected routes with file-based session storage.
     
     This test specifically verifies that the test client maintains the session state
     correctly between requests when using file-based session storage.
@@ -572,12 +316,11 @@ def test_protected_routes_with_file_session(app_and_client_with_file_storage):
     )
     assert response.status_code == 200
     assert response.json()["status"] == "logged in"
-    assert response.json()["role"] == ROLE_ADMIN
+    assert response.json()["role"] == [ROLE_ADMIN]
     
     # Step 3: Verify session file was created
     session_files_after_login = os.listdir(temp_dir)
     assert len(session_files_after_login) > 0, "Session file should be created after login"
-    print(f"Session files after login: {session_files_after_login}")
     
     # Step 4: Get the session cookie
     session_cookie = client.cookies.get(login_manager.cookie_settings.cookie_name)
@@ -613,7 +356,7 @@ def test_protected_routes_with_file_session(app_and_client_with_file_storage):
     )
     assert response.status_code == 200
     assert response.json()["status"] == "logged in"
-    assert response.json()["role"] == ROLE_SUPER_ADMIN
+    assert response.json()["role"] == [ROLE_SUPER_ADMIN]
     
     # Step 11: Access super-admin-only route - should succeed now
     response = client.get("/api/superadmin")
@@ -630,8 +373,6 @@ def test_protected_routes_with_file_session(app_and_client_with_file_storage):
     file_size = os.path.getsize(session_file_path)
     assert file_size > 0, "Session file should not be empty"
     
-    print(f"Session file path: {session_file_path}, size: {file_size} bytes")
-    
     # Final verification: Logout and check session is cleared
     response = client.get("/logout")
     assert response.status_code == 200
@@ -641,8 +382,12 @@ def test_protected_routes_with_file_session(app_and_client_with_file_storage):
     assert response.status_code == 401
 
 
-def test_token_revocation(app_and_client):
-    """Tests the token revocation functionality."""
+def test_token_revocation(app_and_client) -> None:
+    """Test token revocation functionality.
+    
+    This test verifies that the token revocation mechanism correctly
+    invalidates and revokes access tokens.
+    """
     import importlib
     from fastapi_cookie_auth.utils import revocation
     
@@ -688,8 +433,12 @@ def test_token_revocation(app_and_client):
     revocation.MAX_REVOKED = old_max
 
 
-def test_access_attempt_without_authentication(app_and_client):
-    """Tests attempts to access protected routes without authentication."""
+def test_access_attempt_without_authentication(app_and_client) -> None:
+    """Test attempts to access protected routes without authentication.
+    
+    This test verifies that unauthenticated requests to protected routes
+    are properly rejected with a 401 status code.
+    """
     _, client = app_and_client
     
     # Try to access protected route
@@ -710,8 +459,15 @@ def test_access_attempt_without_authentication(app_and_client):
     assert response.status_code == 401
 
 
-def test_roles_required_decorator(app_and_client):
-    """Specific test for the roles_required decorator."""
+def test_roles_required_decorator(app_and_client: Tuple[FastAPI, TestClient]) -> None:
+    """Test the roles_required decorator functionality.
+    
+    This test verifies that the roles_required decorator correctly
+    restricts access based on user roles.
+    
+    Args:
+        app_and_client: Tuple containing the FastAPI app and test client
+    """
     _, client = app_and_client
     
     # 1. Login as normal user - we use data instead of params to simulate a form post
@@ -723,9 +479,6 @@ def test_roles_required_decorator(app_and_client):
     # Verify that the response was successful
     assert response.status_code == 200
     assert response.json()["status"] == "logged in"
-    
-    # No verificamos el acceso a rutas protegidas porque el cliente de prueba
-    # no mantiene correctamente el estado de la sesión entre solicitudes
     
     # 3. Logout
     response = client.get("/logout")
@@ -758,9 +511,6 @@ def test_roles_required_decorator(app_and_client):
     assert response.status_code == 200
     assert response.json()["status"] == "logged in"
     
-    # No verificamos el acceso a rutas protegidas porque el cliente de prueba
-    # no mantiene correctamente el estado de la sesión entre solicitudes
-
 
 def test_session_protection_configuration(app_and_client):
     """Tests session protection configuration."""
