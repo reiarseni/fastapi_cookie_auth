@@ -115,12 +115,8 @@ def login_user(
     else:
         user_id = str(user.id)
     
-    print(f"User ID for session: {user_id}")
-    
-    # Verify LoginManager access
+    # Get LoginManager from request state
     login_manager = getattr(request.state, "login_manager", None)
-    print(f"Login manager found: {login_manager is not None}")
-    
     if not login_manager:
         raise RuntimeError("LoginManager not initialized for this request")
     
@@ -152,18 +148,15 @@ def login_user(
     
     # Verify we have a secret key
     secret_key = cookie_settings.secret_key
-    print(f"Secret key exists: {bool(secret_key)}")
     if not secret_key:
         raise ValueError("A secret key is required to generate session tokens")
     
-    # Generate random token
+    # Generate random token for the session
     session_token = generate_session_token()
     cookie_value = session_token
-    print(f"Generated session token: {session_token}")
     
     # Encode session data with user ID, request info and extra data
     session_data = encode_session_data(user_id, request, extra_session_data)
-    print(f"Session data: {session_data}")
     
     # Store in the session storage with proper max_age
     login_manager._storage.set(session_token, session_data, max_age)

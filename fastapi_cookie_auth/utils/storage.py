@@ -1,8 +1,8 @@
 """
-Módulo para el almacenamiento de sesiones y datos compartidos.
+Session storage implementations for FastAPI Cookie Auth.
 
-Proporciona implementaciones de almacenamiento para las sesiones,
-incluyendo almacenamiento en memoria y en disco con serialización optimizada.
+Provides different storage backends for session data including
+in-memory and file-based storage with optimized serialization.
 """
 
 import os
@@ -14,10 +14,10 @@ from typing import Dict, Any, Optional, Union
 from pathlib import Path
 from abc import ABC, abstractmethod
 
-# Constantes para los tipos de almacenamiento disponibles
-STORAGE_MEMORY = "memory"  # Almacenamiento en memoria (volátil)
-STORAGE_FILE = "file"      # Almacenamiento en archivos con serialización optimizada (persistente)
-STORAGE_REDIS = "redis"    # Almacenamiento en Redis (no implementado aún)
+# Storage type constants
+STORAGE_MEMORY = "memory"
+STORAGE_FILE = "file"
+STORAGE_REDIS = "redis"
 
 class SessionStorageInterface(ABC):
     """Base interface for session storage implementations.

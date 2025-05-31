@@ -202,12 +202,7 @@ async def login_post(
     remember: bool = Form(False)
 ):
     """Process login form submission."""
-    print(f"\n\n===== LOGIN ATTEMPT =====")
-    print(f"Username: {username}")
-    print(f"Password: {password}")
-    print(f"Remember: {remember}")
-    print(f"User IP: {request.client.host}")
-    print(f"User Agent: {request.headers.get('user-agent', 'Unknown')}")
+    print(f"Login attempt for user: {username} from {request.client.host}")
 
     # Find user by username
     user = None
@@ -216,13 +211,15 @@ async def login_post(
             user = u
             break
     
-    print(f"Found user: {user is not None}")
-    if user:
-        print(f"User ID: {user.id}, Username: {user.username}")
+    if user is None:
+        print(f"Login failed: User {username} not found")
+        return templates.TemplateResponse("login.html", {"request": request, "error": "Invalid username or password"})
+        
+    # User found, verify password
     
     # Check credentials
-    if user and user.password == password:
-        print(f"Password matches! Logging in user...")
+    if user.password == password:
+        print(f"Login successful for user: {user.username} (ID: {user.id})")
         
         # Solución para el problema de cookies con redirecciones en FastAPI
         # 1. Crear una respuesta normal (no un RedirectResponse)
@@ -233,12 +230,14 @@ async def login_post(
         
         # 3. Aplicar el login_user a esta respuesta (esto establecerá las cookies)
         success = login_user(request, response, user, remember=remember)
-        print(f"Login successful: {success}")
+        if not success:
+            print(f"Login failed for user: {user.username}")
         
         # 4. Retornar la respuesta ya configurada con cookies
         return response
     
     # Invalid credentials
+    print(f"Login failed: Invalid password for user {username}")
     return templates.TemplateResponse(
         "login.html",
         {"request": request, "error": "Invalid credentials"},

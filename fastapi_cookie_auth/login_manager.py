@@ -63,20 +63,13 @@ class LoginManager:
                  later with the init_app method.
             mode: Configuration mode to use ("dev", "prod", or "custom")
         """
-        # Application and callback references
         self.app: Optional[FastAPI] = app
         self._user_loader: Optional[Callable] = None
         self._anonymous_user: Optional[Type] = None
         self._unauthorized_callback: Optional[Callable] = None
-        
-        # Login view and session protection configuration
         self._login_view: str = "/login"
         self._session_protection: str = "basic"
-        
-        # Cookie settings
         self._cookie_settings: CookieSettings = CookieSettings()
-        
-        # Storage configuration
         self.store_session_in_memory: bool = False
         self._storage: SessionStorageInterface = session_store
         self._storage_type: str = STORAGE_FILE
@@ -105,21 +98,17 @@ class LoginManager:
         # Configure cookie settings
         self._cookie_settings.configure(mode)
         
-        # Apply general configuration based on mode
         if mode == "dev":
-            # Aplicar configuración de desarrollo
             if "login_view" in DEV_CONFIG:
                 self.login_view = DEV_CONFIG["login_view"]
             if "session_protection" in DEV_CONFIG:
                 self.session_protection = DEV_CONFIG["session_protection"]
         elif mode == "prod":
-            # Aplicar configuración de producción
             if "login_view" in PROD_CONFIG:
                 self.login_view = PROD_CONFIG["login_view"]
             if "session_protection" in PROD_CONFIG:
                 self.session_protection = PROD_CONFIG["session_protection"]
         elif mode == "custom":
-            # Aplicar configuración personalizada
             pass
     
     def configure_storage(self, storage_type: str = "file", **kwargs) -> None:
@@ -196,7 +185,7 @@ class LoginManager:
                 # Check if token has been revoked
                 if REVOCATION_CONFIG["enabled"] and is_token_revoked(session_token):
                     # Token is revoked, don't authenticate the user
-                    print("Token was revoked, denying authentication")
+                    pass  # Silent on revoked tokens
                 else:
                     try:
                         # Import necessary functions to decode session data
@@ -215,29 +204,17 @@ class LoginManager:
                             if session_data:
                                 user_id = get_user_id_from_session_data(session_data)
                                 if user_id and self._user_loader:
-                                    print(f"Found user_id in session: {user_id}")
-                                    
                                     # Load user by ID
                                     user = await self._user_loader(user_id)
                                     if user:
-                                        print(f"Successfully loaded user: {user.username} (ID: {user_id})")
-                                        
                                         # Set user in request state and context
                                         request.state.user = user
                                         current_user_ctx.set(user)
-                                    else:
-                                        print(f"User loader could not find user with ID: {user_id}")
-                                else:
-                                    print("No user ID found in session data or no user loader")
-                            else:
-                                print("Failed to decode session data")
-                        else:
-                            print(f"No session data found for token: {session_token}")
                     except Exception as e:
-                        print(f"Error in user loader middleware: {str(e)}")
+                        # Log the error but don't expose details to the client
+                        print(f"Authentication error: {e.__class__.__name__}")
                         # Continue with anonymous user
-            else:
-                print("No session token found in cookie")
+            # No session token - user remains anonymous
             
             # Continue with the request
             response = await call_next(request)
