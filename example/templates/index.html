@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+
+{% block title %}Home - FastAPI Cookie Auth{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-8 offset-md-2">
+        <div class="card">
+            <div class="card-header">
+                <h2>Welcome to FastAPI Cookie Auth</h2>
+            </div>
+            <div class="card-body">
+                <h5 class="card-title">{{ greeting }}</h5>
+                <p class="card-text">
+                    This is a sample application that demonstrates cookie-based authentication with FastAPI, 
+                    using the <code>fastapi_cookie_auth</code> library.
+                </p>
+                
+                {% if user and user.is_authenticated %}
+                <div class="alert alert-success">
+                    <p>You are logged in as <strong>{{ user.username }}</strong> (ID: {{ user.id }}).</p>
+                    <div class="d-flex gap-2">
+                        <a href="/protected" class="btn btn-primary">Protected Area</a>
+                        <a href="/api/profile" class="btn btn-info">Profile API</a>
+                        {% if user.role == 'admin' or user.role == 'super_admin' %}
+                        <a href="/api/admin" class="btn btn-warning">Admin API</a>
+                        <a href="/admin/users" class="btn btn-warning">Manage Users</a>
+                        {% endif %}
+                        {% if user.role == 'super_admin' %}
+                        <a href="/admin/superadmin-only" class="btn btn-danger">Super Admin Area</a>
+                        {% endif %}
+                        <a href="/logout" class="btn btn-outline-danger">Logout</a>
+                    </div>
+                </div>
+                {% else %}
+                <div class="alert alert-info">
+                    <p>You are not logged in.</p>
+                    <a href="/login" class="btn btn-primary">Login</a>
+                </div>
+                {% endif %}
+                
+                <h5 class="mt-4">Test credentials:</h5>
+                <ul>
+                    <li>Super Admin: <code>superadmin / superadmin123</code></li>
+                    <li>Admin: <code>admin / admin123</code></li>
+                    <li>Normal user: <code>user / user123</code></li>
+                    <li>Guest: <code>guest / guest</code></li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

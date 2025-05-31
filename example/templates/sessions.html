@@ -1,0 +1,195 @@
+{% extends "base.html" %}
+
+{% block title %}Gestión de Sesiones{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h1 class="mb-4">Gestión de Sesiones</h1>
+    
+    <div class="row">
+        <div class="col-12 mb-4">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    Configuración de Sesiones
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h5>Expiración de Sesiones</h5>
+                            <ul class="list-group">
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    Estado
+                                    <span class="badge {% if session_expiry.enabled %}bg-success{% else %}bg-danger{% endif %} rounded-pill">
+                                        {% if session_expiry.enabled %}Activado{% else %}Desactivado{% endif %}
+                                    </span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    Tiempo de vida
+                                    <span class="badge bg-info rounded-pill">{{ session_expiry.lifetime }} segundos</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    Intervalo de limpieza
+                                    <span class="badge bg-info rounded-pill">{{ session_expiry.cleanup_interval }} segundos</span>
+                                </li>
+                            </ul>
+                        </div>
+                        <div class="col-md-6">
+                            <h5>Revocación de Tokens</h5>
+                            <ul class="list-group">
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    Estado
+                                    <span class="badge {% if revocation_enabled %}bg-success{% else %}bg-danger{% endif %} rounded-pill">
+                                        {% if revocation_enabled %}Activado{% else %}Desactivado{% endif %}
+                                    </span>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    Sesiones Activas
+                </div>
+                <div class="card-body">
+                    {% if has_storage_listing %}
+                        {% if sessions %}
+                            <div class="table-responsive">
+                                <table class="table table-striped">
+                                    <thead>
+                                        <tr>
+                                            <th>Token</th>
+                                            <th>Usuario</th>
+                                            <th>IP</th>
+                                            <th>Agente</th>
+                                            <th>Creado</th>
+                                            <th>Última actividad</th>
+                                            <th>Acciones</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for session in sessions %}
+                                        <tr>
+                                            <td>{{ session.token }}</td>
+                                            <td>{{ session.user_id }}</td>
+                                            <td>{{ session.ip_address if 'ip_address' in session else 'Desconocido' }}</td>
+                                            <td title="{{ session.user_agent if 'user_agent' in session else 'Desconocido' }}">
+                                                {{ (session.user_agent[:20] + '...') if 'user_agent' in session and session.user_agent|length > 20 else session.user_agent if 'user_agent' in session else 'Desconocido' }}
+                                            </td>
+                                            <td>{{ session.created_at_str if 'created_at_str' in session else 'Desconocido' }}</td>
+                                            <td>{{ session.last_activity_str if 'last_activity_str' in session else 'Desconocido' }}</td>
+                                            <td>
+                                                {% if revocation_enabled %}
+                                                <button class="btn btn-danger btn-sm revoke-btn" 
+                                                        data-token="{{ session.raw_token }}" 
+                                                        onclick="revokeToken('{{ session.raw_token }}')">
+                                                    Revocar
+                                                </button>
+                                                {% else %}
+                                                <button class="btn btn-danger btn-sm" disabled>Revocar</button>
+                                                {% endif %}
+                                            </td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        {% else %}
+                            <div class="alert alert-info">No hay sesiones activas registradas.</div>
+                        {% endif %}
+                    {% else %}
+                        <div class="alert alert-warning">
+                            El almacenamiento de sesiones actual no soporta listar sesiones activas.
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal para confirmación -->
+<div class="modal fade" id="confirmModal" tabindex="-1" aria-labelledby="confirmModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title" id="confirmModalLabel">Confirmar Revocación</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                ¿Está seguro que desea revocar esta sesión? El usuario será desconectado inmediatamente.
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-danger" id="confirmRevoke">Revocar Sesión</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal para resultados -->
+<div class="modal fade" id="resultModal" tabindex="-1" aria-labelledby="resultModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="resultModalLabel">Resultado</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="resultMessage">
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-primary" data-bs-dismiss="modal">Cerrar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    let tokenToRevoke = '';
+    const confirmModal = new bootstrap.Modal(document.getElementById('confirmModal'));
+    const resultModal = new bootstrap.Modal(document.getElementById('resultModal'));
+    
+    function revokeToken(token) {
+        tokenToRevoke = token;
+        confirmModal.show();
+    }
+    
+    document.getElementById('confirmRevoke').addEventListener('click', async function() {
+        confirmModal.hide();
+        try {
+            const response = await fetch('/revoke-session', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: `token=${encodeURIComponent(tokenToRevoke)}`
+            });
+            
+            const result = await response.json();
+            
+            document.getElementById('resultMessage').textContent = result.message;
+            document.getElementById('resultModalLabel').textContent = result.success ? 'Éxito' : 'Error';
+            document.getElementById('resultMessage').className = result.success ? 'text-success' : 'text-danger';
+            
+            resultModal.show();
+            
+            // Recargar la página después de un breve retraso si la operación fue exitosa
+            if (result.success) {
+                setTimeout(() => {
+                    window.location.reload();
+                }, 1500);
+            }
+        } catch (error) {
+            document.getElementById('resultMessage').textContent = 'Error al procesar la solicitud: ' + error.message;
+            document.getElementById('resultModalLabel').textContent = 'Error';
+            document.getElementById('resultMessage').className = 'text-danger';
+            resultModal.show();
+        }
+    });
+</script>
+{% endblock %}

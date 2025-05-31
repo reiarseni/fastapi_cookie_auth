@@ -1,0 +1,20 @@
+body {
+    background-color: #f8f9fa;
+    padding-bottom: 70px;
+}
+
+.card {
+    margin-bottom: 20px;
+    box-shadow: 0 .125rem .25rem rgba(0,0,0,.075);
+}
+
+.card-header {
+    font-weight: 500;
+}
+
+footer {
+    position: fixed;
+    bottom: 0;
+    width: 100%;
+    border-top: 1px solid #dee2e6;
+}

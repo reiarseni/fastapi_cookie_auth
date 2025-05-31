@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+
+{% block title %}Superadmin Panel{% endblock %}
+
+{% block content %}
+<div class="container my-4">
+    <h1 class="mb-4">Superadmin Panel</h1>
+    
+    <div class="alert alert-danger">
+        <strong>Restricted Area!</strong> Only accessible for users with role {{ user.role }}
+    </div>
+    
+    <div class="card mb-4">
+        <div class="card-header bg-danger text-white">
+            <h5 class="mb-0">Exclusive Superadmin Functions</h5>
+        </div>
+        <div class="card-body">
+            <p>This section contains options and functionalities exclusive to the superadmin role.</p>
+            
+            <div class="list-group mb-3">
+                <a href="#" class="list-group-item list-group-item-action">
+                    <div class="d-flex w-100 justify-content-between">
+                        <h5 class="mb-1">Administrator Management</h5>
+                        <small class="text-danger">Critical</small>
+                    </div>
+                    <p class="mb-1">Create, modify and delete users with administrator role</p>
+                </a>
+                <a href="#" class="list-group-item list-group-item-action">
+                    <div class="d-flex w-100 justify-content-between">
+                        <h5 class="mb-1">System Configuration</h5>
+                        <small class="text-danger">Advanced</small>
+                    </div>
+                    <p class="mb-1">Modify global parameters and system configurations</p>
+                </a>
+                <a href="#" class="list-group-item list-group-item-action">
+                    <div class="d-flex w-100 justify-content-between">
+                        <h5 class="mb-1">Action Audit</h5>
+                        <small class="text-danger">Security</small>
+                    </div>
+                    <p class="mb-1">View complete logs of all actions performed in the system</p>
+                </a>
+            </div>
+        </div>
+    </div>
+    
+    <a href="/" class="btn btn-secondary">Back to Home</a>
+</div>
+{% endblock %}

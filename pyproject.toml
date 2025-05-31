@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=42", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "fastapi_cookie_auth"
+version = "0.1.0"
+description = "FastAPI Cookie Auth - A Flask-Login style authentication for FastAPI"
+readme = "README.md"
+authors = [
+    {name = "Reinaldo Arsenio Lorenzo Trujillo", email = "reiarseni@gmail.com"}
+]
+license = {text = "MIT"}
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+requires-python = ">=3.7"
+dependencies = [
+    "fastapi>=0.68.0",
+    "pydantic>=1.8.0",
+    "starlette>=0.14.0",
+]
+
+[project.urls]
+"Homepage" = "https://github.com/reiarseni/fastapi_cookie_auth"
+"Bug Tracker" = "https://github.com/reiarseni/fastapi_cookie_auth/issues"
+
+[tool.setuptools]
+packages = ["fastapi_cookie_auth", "fastapi_cookie_auth.utils"]

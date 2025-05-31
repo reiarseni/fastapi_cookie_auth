@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+
+{% block title %}Protected Area - FastAPI Cookie Auth{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-8 offset-md-2">
+        <div class="card">
+            <div class="card-header bg-success text-white">
+                <h3>Protected Area</h3>
+            </div>
+            <div class="card-body">
+                <h5 class="card-title">Access granted!</h5>
+                <p class="card-text">
+                    You are viewing protected content that is only available to authenticated users.
+                </p>
+                <div class="alert alert-info">
+                    <p class="mb-0"><strong>User:</strong> {{ user.username }}</p>
+                    <p class="mb-0"><strong>ID:</strong> {{ user.id }}</p>
+                    <p class="mb-0"><strong>Authenticated:</strong> {{ user.is_authenticated }}</p>
+                </div>
+                
+                <div class="mt-4">
+                    <h6>Profile Data (API)</h6>
+                    <div id="profile-data" class="alert alert-secondary">
+                        <p>Loading profile data...</p>
+                    </div>
+                    <button id="load-profile" class="btn btn-secondary">Load profile data</button>
+                </div>
+                
+                <a href="/" class="btn btn-primary mt-3">Back to home</a>
+                <a href="/logout" class="btn btn-outline-danger mt-3">Logout</a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.getElementById('load-profile').addEventListener('click', async function() {
+        try {
+            const response = await fetch('/api/profile');
+            if (response.ok) {
+                const data = await response.json();
+                document.getElementById('profile-data').innerHTML = `
+                    <pre>${JSON.stringify(data, null, 2)}</pre>
+                `;
+            } else {
+                if (response.status === 401) {
+                    window.location.href = '/login';
+                } else {
+                    document.getElementById('profile-data').innerHTML = `
+                        <div class="alert alert-danger">Error: ${response.status}</div>
+                    `;
+                }
+            }
+        } catch (error) {
+            document.getElementById('profile-data').innerHTML = `
+                <div class="alert alert-danger">Error: ${error.message}</div>
+            `;
+        }
+    });
+</script>
+{% endblock %}

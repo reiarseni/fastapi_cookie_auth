@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+
+{% block title %}Administration Panel - Users{% endblock %}
+
+{% block content %}
+<div class="container my-4">
+    <h1 class="mb-4">Administration Panel - Users</h1>
+    
+    <div class="alert alert-info">
+        <strong>Information:</strong> You accessed as administrator ({{ user.username }})
+    </div>
+    
+    <div class="card mb-4">
+        <div class="card-header bg-primary text-white">
+            <h5 class="mb-0">User List</h5>
+        </div>
+        <div class="card-body">
+            <table class="table table-striped">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Username</th>
+                        <th>Role</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for user_item in users %}
+                    <tr>
+                        <td>{{ user_item.id }}</td>
+                        <td>{{ user_item.username }}</td>
+                        <td>
+                            <span class="badge {% if user_item.role == 'admin' %}bg-danger{% elif user_item.role == 'user' %}bg-primary{% else %}bg-secondary{% endif %}">
+                                {{ user_item.role }}
+                            </span>
+                        </td>
+                        <td>
+                            <button class="btn btn-sm btn-outline-primary">Edit</button>
+                            <button class="btn btn-sm btn-outline-danger">Delete</button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    
+    <a href="/" class="btn btn-secondary">Back to Home</a>
+</div>
+{% endblock %}
